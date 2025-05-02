@@ -25,15 +25,26 @@ async function shortenUrl(longUrl) {
     }
 }
 
+function createPersonalizedMessage(name, shortUrl) {
+    // Get first name by splitting on space and taking first part
+    const firstName = name.split(' ')[0];
+    return `Hi ${firstName}, get ready for HCL SW Dubai SKO! Check out what MAX AI powered by Unica+ has coming up for you: ${shortUrl}`;
+}
+
 async function processExcelFile() {
     try {
+        const inputFile = 'input.xlsx';
+        console.log('Reading Excel file...');
+        
         // Read the Excel file
-        const workbook = XLSX.readFile('input.xlsx');
+        const workbook = XLSX.readFile(inputFile);
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
         
         // Convert to JSON
         const data = XLSX.utils.sheet_to_json(worksheet);
+        
+        let updatedCount = 0;
         
         // Process each row
         for (let row of data) {
@@ -42,19 +53,33 @@ async function processExcelFile() {
                 const shortUrl = await shortenUrl(row.URL);
                 if (shortUrl) {
                     row['Short URL'] = shortUrl;
+                    // Create and add personalized message
+                    row['Message'] = createPersonalizedMessage(row.Name, shortUrl);
+                    updatedCount++;
+                    
+                    // Update the file after each successful URL shortening
+                    const newWorksheet = XLSX.utils.json_to_sheet(data);
+                    workbook.Sheets[sheetName] = newWorksheet;
+                    XLSX.writeFile(workbook, inputFile);
+                    console.log(`✓ Updated short URL and message for ${row.Name}`);
                 }
+            } else if (row.URL && row['Short URL'] && !row['Message']) {
+                // If URL and Short URL exist but no message, just add the message
+                row['Message'] = createPersonalizedMessage(row.Name, row['Short URL']);
+                updatedCount++;
+                
+                // Update the file
+                const newWorksheet = XLSX.utils.json_to_sheet(data);
+                workbook.Sheets[sheetName] = newWorksheet;
+                XLSX.writeFile(workbook, inputFile);
+                console.log(`✓ Added message for ${row.Name}`);
             }
         }
         
-        // Convert back to worksheet
-        const newWorksheet = XLSX.utils.json_to_sheet(data);
+        console.log(`\nProcessing completed!`);
+        console.log(`- Total records updated: ${updatedCount}`);
+        console.log(`- File updated: ${inputFile}`);
         
-        // Create new workbook and save
-        const newWorkbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, sheetName);
-        XLSX.writeFile(newWorkbook, 'output.xlsx');
-        
-        console.log('Processing completed! Check output.xlsx for results.');
     } catch (error) {
         console.error('Error processing Excel file:', error.message);
     }
